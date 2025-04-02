@@ -1,11 +1,15 @@
-import { View, Text, StyleSheet, FlatList, RefreshControl, Platform, Pressable } from 'react-native';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Trophy, Medal } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { 
+  View, Text, StyleSheet, FlatList, RefreshControl, 
+  Platform, Pressable, Appearance, useColorScheme 
+} from 'react-native';
+import axios from 'axios';
+import { Trophy, Medal, Moon, Sun } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type Student = {
-  id: string;
-  full_name: string;
+  _id: string;
+  fullName: string;
   score: number;
   rank: number;
 };
@@ -14,17 +18,14 @@ export default function LeaderboardScreen() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const colorScheme = useColorScheme();
+  const [darkMode, setDarkMode] = useState(colorScheme === 'dark');
 
   const fetchLeaderboard = async () => {
     try {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .order('score', { ascending: false });
-
-      if (error) throw error;
-
-      const rankedStudents = data.map((student, index) => ({
+      const response = await axios.get('http://localhost:5000/api/students');
+      
+      const rankedStudents = response.data.map((student: any, index: number) => ({
         ...student,
         rank: index + 1
       }));
@@ -40,6 +41,10 @@ export default function LeaderboardScreen() {
 
   useEffect(() => {
     fetchLeaderboard();
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      setDarkMode(colorScheme === 'dark');
+    });
+    return () => subscription.remove();
   }, []);
 
   const onRefresh = () => {
@@ -47,89 +52,110 @@ export default function LeaderboardScreen() {
     fetchLeaderboard();
   };
 
-  const getRankColor = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return '#FFD700'; // Gold
-      case 2:
-        return '#C0C0C0'; // Silver
-      case 3:
-        return '#CD7F32'; // Bronze
-      default:
-        return '#6366f1'; // Default color
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
+  const getRankColors = (rank: number): [string, string, ...string[]] => {
+    if (darkMode) {
+      switch (rank) {
+        case 1: return ['#FFD700', '#B8860B']; // Dark gold
+        case 2: return ['#C0C0C0', '#808080']; // Dark silver
+        case 3: return ['#CD7F32', '#8B4513']; // Bronze
+        default: return ['#7C3AED', '#5B21B6']; // Dark purple
+      }
+    } else {
+      switch (rank) {
+        case 1: return ['#FFD700', '#FFA500']; // Gold
+        case 2: return ['#C0C0C0', '#A9A9A9']; // Silver
+        case 3: return ['#CD7F32', '#8B4513']; // Bronze
+        default: return ['#6366f1', '#4f46e5']; // Purple
+      }
     }
   };
 
   const renderItem = ({ item }: { item: Student }) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.studentCard,
-        pressed && styles.pressed
-      ]}>
-      <View style={[styles.rankBadge, { backgroundColor: getRankColor(item.rank) }]}>
+    <View style={styles(darkMode).studentCard}>
+      <LinearGradient
+        colors={getRankColors(item.rank)}
+        style={styles(darkMode).rankBadge}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
         {item.rank <= 3 ? (
           <Medal size={24} color="white" />
         ) : (
-          <Text style={styles.rankText}>{item.rank}</Text>
+          <Text style={styles(darkMode).rankText}>{item.rank}</Text>
         )}
+      </LinearGradient>
+      <View style={styles(darkMode).studentInfo}>
+        <Text style={styles(darkMode).name}>{item.fullName}</Text>
+        <Text style={styles(darkMode).score}>{item.score} points</Text>
       </View>
-      <View style={styles.studentInfo}>
-        <Text style={styles.name}>{item.full_name}</Text>
-        <Text style={styles.score}>{item.score} points</Text>
-      </View>
-    </Pressable>
+    </View>
   );
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text>Loading leaderboard...</Text>
+      <View style={styles(darkMode).container}>
+        <Text style={styles(darkMode).loadingText}>Loading leaderboard...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Trophy size={32} color="#6366f1" />
-        <Text style={styles.title}>Top Students</Text>
+    <View style={styles(darkMode).container}>
+      <View style={styles(darkMode).header}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Trophy size={32} color={darkMode ? '#7C3AED' : '#6366f1'} />
+          <Text style={styles(darkMode).title}>Top Students</Text>
+        </View>
+        <Pressable onPress={toggleDarkMode} style={styles(darkMode).themeToggle}>
+          {darkMode ? (
+            <Sun size={24} color="#FBBF24" />
+          ) : (
+            <Moon size={24} color="#1E40AF" />
+          )}
+        </Pressable>
       </View>
+      
       <FlatList
         data={students}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={onRefresh}
-            tintColor="#6366f1"
-            colors={['#6366f1']} // Android
+            colors={darkMode ? ['#7C3AED'] : ['#6366f1']}
+            tintColor={darkMode ? '#7C3AED' : '#6366f1'}
+            progressBackgroundColor={darkMode ? '#1F2937' : '#F3F4F6'}
           />
         }
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles(darkMode).list}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = (darkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: darkMode ? '#111827' : '#f3f4f6',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: darkMode ? '#1F2937' : 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: darkMode ? '#374151' : '#e5e7eb',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: darkMode ? 0.3 : 0.1,
         shadowRadius: 3,
       },
       android: {
@@ -141,14 +167,23 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginLeft: 12,
-    color: '#1f2937',
+    color: darkMode ? '#F3F4F6' : '#1f2937',
+  },
+  themeToggle: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: darkMode ? '#374151' : '#E5E7EB',
+  },
+  loadingText: {
+    color: darkMode ? '#F3F4F6' : '#1f2937',
+    fontSize: 16,
   },
   list: {
     padding: 16,
   },
   studentCard: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: darkMode ? '#1F2937' : 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -157,16 +192,13 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: darkMode ? 0.2 : 0.1,
         shadowRadius: 3,
       },
       android: {
-        elevation: 3,
+        elevation: darkMode ? 4 : 3,
       },
     }),
-  },
-  pressed: {
-    opacity: 0.7,
   },
   rankBadge: {
     width: 40,
@@ -187,11 +219,11 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1f2937',
+    color: darkMode ? '#F3F4F6' : '#1f2937',
   },
   score: {
     fontSize: 14,
-    color: '#6b7280',
+    color: darkMode ? '#9CA3AF' : '#6b7280',
     marginTop: 4,
   },
 });

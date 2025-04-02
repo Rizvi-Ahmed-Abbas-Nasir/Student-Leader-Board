@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { 
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, 
+  Platform, KeyboardAvoidingView, ScrollView, useColorScheme 
+} from 'react-native';
+import axios from 'axios';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = 'http://localhost:5000';
 
 export default function AuthScreen() {
   const [email, setEmail] = useState('');
@@ -8,88 +15,100 @@ export default function AuthScreen() {
   const [fullName, setFullName] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const theme = useColorScheme();
+  const isDarkMode = theme === 'dark';
 
   const handleAuth = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+    if (!isLogin && !fullName) {
+      Alert.alert('Error', 'Please enter your full name');
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/supabase/signup', { 
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, fullName }),
-      });
+      let endpoint = isLogin ? '/login' : '/signup';
+      let payload = isLogin ? { email, password } : { email, password, fullName };
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      const response = await axios.post(`${API_URL}${endpoint}`, payload);
 
       if (isLogin) {
+        await AsyncStorage.setItem('userToken', response.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify({
+          userId: response.data.userId,
+          fullName: response.data.fullName
+        }));
         router.replace('/profile');
       } else {
         Alert.alert('Success', 'Account created successfully!');
         setIsLogin(true);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      const errorMessage = error.response?.data?.message || 'Something went wrong';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={[styles.container, { backgroundColor: isDarkMode ? '#1f2937' : '#f3f4f6' }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{isLogin ? 'Login' : 'Sign Up'}</Text>
-
-        {!isLogin && (
-          <TextInput
-            style={styles.input}
-            placeholder="Full Name"
-            value={fullName}
-            onChangeText={setFullName}
-            autoCapitalize="words"
-            placeholderTextColor="#9ca3af"
+        <View style={[styles.card, { backgroundColor: isDarkMode ? '#374151' : 'white' }]}>
+          <Text style={[styles.title, { color: isDarkMode ? 'white' : '#1f2937' }]}>
+            {isLogin ? 'Welcome Back' : 'Create Account'}
+          </Text>
+          {!isLogin && (
+            <TextInput 
+              style={[styles.input, { backgroundColor: isDarkMode ? '#4b5563' : 'white', color: isDarkMode ? 'white' : '#1f2937' }]} 
+              placeholder="Full Name" 
+              value={fullName} 
+              onChangeText={setFullName} 
+              autoCapitalize="words" 
+              placeholderTextColor={isDarkMode ? '#d1d5db' : '#9ca3af'} 
+            />
+          )}
+          <TextInput 
+            style={[styles.input, { backgroundColor: isDarkMode ? '#4b5563' : 'white', color: isDarkMode ? 'white' : '#1f2937' }]} 
+            placeholder="Email" 
+            value={email} 
+            onChangeText={setEmail} 
+            autoCapitalize="none" 
+            keyboardType="email-address" 
+            placeholderTextColor={isDarkMode ? '#d1d5db' : '#9ca3af'} 
           />
-        )}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholderTextColor="#9ca3af"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholderTextColor="#9ca3af"
-        />
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleAuth}
-          disabled={loading}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Loading...' : isLogin ? 'Login' : 'Sign Up'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.switchButton} onPress={() => setIsLogin(!isLogin)} activeOpacity={0.7}>
-          <Text style={styles.switchText}>
-            {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Login'}
-          </Text>
-        </TouchableOpacity>
+          <TextInput 
+            style={[styles.input, { backgroundColor: isDarkMode ? '#4b5563' : 'white', color: isDarkMode ? 'white' : '#1f2937' }]} 
+            placeholder="Password" 
+            value={password} 
+            onChangeText={setPassword} 
+            secureTextEntry 
+            placeholderTextColor={isDarkMode ? '#d1d5db' : '#9ca3af'} 
+          />
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleAuth} 
+            disabled={loading} 
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>{loading ? 'Processing...' : isLogin ? 'Login' : 'Sign Up'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.switchButton} 
+            onPress={() => setIsLogin(!isLogin)} 
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.switchText, { color: isDarkMode ? '#93c5fd' : '#6366f1' }]}>
+              {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Login'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -98,58 +117,49 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
+  card: {
+    width: 320,
+    padding: 24,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 24,
+    marginBottom: 20,
     textAlign: 'center',
-    color: '#1f2937',
   },
   input: {
-    backgroundColor: 'white',
-    padding: Platform.OS === 'ios' ? 15 : 12,
+    padding: 14,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     fontSize: 16,
-    color: '#1f2937',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
   button: {
     backgroundColor: '#6366f1',
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#6366f1',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -160,11 +170,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   switchButton: {
-    marginTop: 24,
+    marginTop: 16,
     alignItems: 'center',
   },
   switchText: {
-    color: '#6366f1',
     fontSize: 14,
     fontWeight: '500',
   },
